@@ -20,15 +20,17 @@ import (
 )
 
 type Config struct {
-	MqttUrl      string `envconfig:"mqtt_url" required:"true"`
-	MqttUser     string `envconfig:"mqtt_user"`
-	MqttPwd      string `envconfig:"mqtt_password"`
-	MqttClientId string `envconfig:"mqtt_client_id" default:"scd30"`
-	Interval     uint16 `envconfig:"interval" default:"50"`
-	TempOffset   uint16 `envconfig:"temp_offset" default:"150"`
-	Id           string `envconfig:"id" default:"scd30"`
-	Name         string `envconfig:"name" default:"SCD30"`
-	Debug        bool   `envconfig:"debug" default:"false"`
+	MqttUrl          string `envconfig:"mqtt_url" required:"true"`
+	MqttUser         string `envconfig:"mqtt_user"`
+	MqttPwd          string `envconfig:"mqtt_password"`
+	MqttClientId     string `envconfig:"mqtt_client_id" default:"scd30"`
+	Interval         uint16 `envconfig:"interval" default:"50"`
+	AutoCalibration  uint16 `envconfig:"autocal" default:"1"`
+	ForceCalibration uint16 `envconfig:"forcecal"`
+	TempOffset       uint16 `envconfig:"temp_offset" default:"150"`
+	Id               string `envconfig:"id" default:"scd30"`
+	Name             string `envconfig:"name" default:"SCD30"`
+	Debug            bool   `envconfig:"debug" default:"false"`
 }
 
 type measurement struct {
@@ -64,11 +66,16 @@ func main() {
 		log.Fatalf("error %v", err)
 	}
 
+	if config.ForceCalibration > 1 {
+		forcedCalibration(dev)
+		return
+	}
+
 	if err := dev.StartMeasurements(config.Interval); err != nil {
 		log.Fatalf("error %v", err)
 	}
 
-	if err := dev.SetAutomaticSelfCalibration(1); err != nil {
+	if err := dev.SetAutomaticSelfCalibration(config.AutoCalibration); err != nil {
 		log.Fatalf("error %v", err)
 	}
 
@@ -88,6 +95,20 @@ func main() {
 
 		}
 	}
+}
+
+func forcedCalibration(dev *scd30.SCD30) {
+	err := dev.SetAutomaticSelfCalibration(0)
+	if err := dev.StartMeasurements(2); err != nil {
+		log.Fatalf("error %v", err)
+	}
+	fmt.Printf("Forced calibration %v ppm, waiting for 2 minutes\n", config.ForceCalibration)
+	time.Sleep(125 * time.Second)
+	err = dev.SetForcedCalibration(config.ForceCalibration)
+	if err != nil {
+		log.Fatalf("error %v", err)
+	}
+	fmt.Printf("Forced calibration %v ppm done\n", config.ForceCalibration)
 }
 
 func openSCD30() (*scd30.SCD30, error) {
@@ -132,11 +153,11 @@ func checkMeasurement(dev *scd30.SCD30) {
 		log.Fatalf("error %v", err)
 	}
 
-	logInfo.Printf("Got measure %f ppm %f%% %fC", m.CO2, m.Humidity, m.Temperature)
+	logDebug.Printf("Got measure %f ppm %f%% %fC", m.CO2, m.Humidity, m.Temperature)
 
 	publishIfNeeded(m.CO2, co2, 50)
-	publishIfNeeded(m.Temperature, temperature, 0.3)
-	publishIfNeeded(m.Humidity, humidity, 2)
+	publishIfNeeded(m.Temperature, temperature, 0.5)
+	publishIfNeeded(m.Humidity, humidity, 3)
 }
 
 func publishIfNeeded(current float32, old *measurement, diff float64) {
