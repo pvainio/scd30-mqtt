@@ -27,6 +27,8 @@ Application is configure with environment variables
 | SCD30_TEMP_OFFSET     |          | 150     | temperature compensation offset |
 | SCD30_NAME            |          | SCD30   | home assistant device name |
 | SCD30_INTEVAL         |          | 50      | measurement interval in seconds |
+| SCD30_AUTOCAL         |          | 1       | 1 to enable automatic calibration, 0 to disable |
+| SCD30_FORCECAL        |          |         | CO2 ppm to force calibration to |
 
 ## Usage
 
